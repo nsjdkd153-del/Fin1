@@ -1,0 +1,5 @@
+{
+  "name": "Remix: FinanceFlow Dashboard",
+  "description": "A comprehensive personal finance management dashboard with income tracking, manual budget allocation, and bi-directional transaction logic.",
+  "requestFramePermissions": []
+}
