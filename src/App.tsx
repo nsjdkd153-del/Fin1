@@ -21,7 +21,9 @@ import {
   EyeOff,
   Calculator,
   Download,
-  Upload
+  Upload,
+  CalendarDays,
+  LineChart as LineChartIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -30,9 +32,14 @@ import {
   Cell, 
   ResponsiveContainer, 
   Tooltip as RechartsTooltip, 
-  Legend 
+  Legend,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid
 } from 'recharts';
-import { Category, Income, Transaction, FinanceData, CategoryType } from './types';
+import { Category, Income, Transaction, FinanceData, CategoryType, ForecastTransaction } from './types';
 
 const STORAGE_KEY = 'finance_dashboard_v2_data';
 
@@ -41,7 +48,8 @@ const COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899', '#EF4444'
 const initialData: FinanceData = {
   baseCapital: 0,
   incomes: [],
-  categories: []
+  categories: [],
+  forecastTransactions: []
 };
 
 export default function App() {
@@ -54,17 +62,19 @@ export default function App() {
         ...cat,
         type: cat.type || 'expense'
       }));
+      parsed.forecastTransactions = parsed.forecastTransactions || [];
       return parsed;
     }
     return initialData;
   });
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'income' | 'runway' | 'categories' | string>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'income' | 'runway' | 'forecast' | 'categories' | string>('dashboard');
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [isBaseCapitalModalOpen, setIsBaseCapitalModalOpen] = useState(false);
   const [isEditCategoryModalOpen, setIsEditCategoryModalOpen] = useState(false);
+  const [isForecastModalOpen, setIsForecastModalOpen] = useState(false);
   const [showVisuals, setShowVisuals] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -327,6 +337,32 @@ export default function App() {
     setData(prev => ({ ...prev, baseCapital: amount }));
   };
 
+  const handleAddForecastTransaction = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const newTransaction: ForecastTransaction = {
+      id: crypto.randomUUID(),
+      date: formData.get('date') as string,
+      name: formData.get('name') as string,
+      amount: Number(formData.get('amount')),
+      type: formData.get('type') as 'income' | 'expense',
+      category: formData.get('category') as string,
+      recurring: formData.get('recurring') as 'none' | 'weekly' | 'monthly'
+    };
+    setData(prev => ({
+      ...prev,
+      forecastTransactions: [...prev.forecastTransactions, newTransaction]
+    }));
+    setIsForecastModalOpen(false);
+  };
+
+  const handleDeleteForecastTransaction = (id: string) => {
+    setData(prev => ({
+      ...prev,
+      forecastTransactions: prev.forecastTransactions.filter(t => t.id !== id)
+    }));
+  };
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-[#1A1A1A] font-sans">
       {/* Sidebar */}
@@ -359,6 +395,13 @@ export default function App() {
           >
             <Calculator size={20} />
             Runway Calculator
+          </button>
+          <button 
+            onClick={() => setActiveTab('forecast')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'forecast' ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+          >
+            <LineChartIcon size={20} />
+            Forecasting
           </button>
           
           <div className="pt-6 pb-2 px-4">
@@ -411,13 +454,17 @@ export default function App() {
       <main className="md:ml-64 p-4 md:p-8">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              {activeTab === 'dashboard' ? 'Financial Overview' : 
-               activeTab === 'income' ? 'Income' : 
-               activeTab === 'runway' ? 'Runway Calculator' :
-               data.categories.find(c => c.id === activeTab)?.name || 'Category Details'}
-            </h2>
-            <p className="text-gray-500">Manage your capital and tracking efficiently.</p>
+            {activeTab !== 'forecast' && (
+              <>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {activeTab === 'dashboard' ? 'Financial Overview' : 
+                   activeTab === 'income' ? 'Income' : 
+                   activeTab === 'runway' ? 'Runway Calculator' :
+                   data.categories.find(c => c.id === activeTab)?.name || 'Category Details'}
+                </h2>
+                <p className="text-gray-500">Manage your capital and tracking efficiently.</p>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {activeTab === 'income' && (
@@ -663,8 +710,33 @@ export default function App() {
           <RunwayCalculator initialCapital={totalCapital} />
         )}
 
+        {activeTab === 'forecast' && (
+          <div className="space-y-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Financial Forecast</h2>
+                <p className="text-gray-500 text-sm">Projected balance over the next 6 months based on recurring events.</p>
+              </div>
+              <button 
+                onClick={() => setIsForecastModalOpen(true)}
+                className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+              >
+                <Plus size={20} />
+                Add Forecast Event
+              </button>
+            </div>
+
+            <ForecastingTool 
+              initialBalance={totalUnusedInCategories} 
+              forecastTransactions={data.forecastTransactions}
+              onAddTransaction={() => setIsForecastModalOpen(true)}
+              onDeleteTransaction={handleDeleteForecastTransaction}
+            />
+          </div>
+        )}
+
         {/* Category Detail View */}
-        {typeof activeTab === 'string' && activeTab !== 'dashboard' && activeTab !== 'income' && activeTab !== 'runway' && (
+        {typeof activeTab === 'string' && activeTab !== 'dashboard' && activeTab !== 'income' && activeTab !== 'runway' && activeTab !== 'forecast' && (
           <div className="space-y-6">
             {categoryStats.find(c => c.id === activeTab) && (
               <>
@@ -1073,6 +1145,43 @@ export default function App() {
             </form>
           </Modal>
         )}
+
+        {isForecastModalOpen && (
+          <Modal title="Add Forecast Transaction" onClose={() => setIsForecastModalOpen(false)}>
+            <form onSubmit={handleAddForecastTransaction} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Date</label>
+                <input required name="date" type="date" className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" defaultValue={new Date().toISOString().split('T')[0]} />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Name</label>
+                <input required name="name" type="text" placeholder="e.g., Salary, Rent" className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Type</label>
+                <select name="type" className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+                  <option value="income">Income</option>
+                  <option value="expense">Expense</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Recurring</label>
+                <select name="recurring" className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
+                  <option value="none">One-time</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Amount</label>
+                <input required name="amount" type="number" step="1" placeholder="0" className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
+              </div>
+              <button type="submit" className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all">
+                Add to Forecast
+              </button>
+            </form>
+          </Modal>
+        )}
       </AnimatePresence>
     </div>
   );
@@ -1097,7 +1206,7 @@ function SummaryCard({ title, value, icon, color, subtitle }: { title: string, v
       </div>
       <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
       <p className="text-2xl font-bold text-gray-900">{formatCurrency(value)}</p>
-      {subtitle && <p className="text-xs text-gray-400 mt-2">{subtitle}</p>}
+      {subtitle && <div className="text-xs text-gray-400 mt-2">{subtitle}</div>}
     </div>
   );
 }
@@ -1134,7 +1243,9 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, onClick }) => {
       <div className="space-y-3">
         <div className="flex justify-between text-sm">
           <span className="text-gray-500">Spent</span>
-          <span className="font-bold">{formatCurrency(category.spent)} / {formatCurrency(category.allocatedBudget)}</span>
+          <div className="text-right">
+            <p className="font-bold">{formatCurrency(category.spent)} / {formatCurrency(category.allocatedBudget)}</p>
+          </div>
         </div>
         <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
           <motion.div 
@@ -1145,9 +1256,11 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, onClick }) => {
         </div>
         <div className="flex justify-between text-xs pt-2">
           <span className="text-gray-400">Current Balance</span>
-          <span className={`font-bold ${category.currentBudget < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-            {formatCurrency(category.currentBudget)}
-          </span>
+          <div className="text-right">
+            <p className={`font-bold ${category.currentBudget < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+              {formatCurrency(category.currentBudget)}
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -1431,12 +1544,222 @@ function RunwayCalculator({ initialCapital }: { initialCapital: number }) {
   );
 }
 
+// Forecasting Tool Component
+function ForecastingTool({ initialBalance, forecastTransactions, onAddTransaction, onDeleteTransaction }: { 
+  initialBalance: number, 
+  forecastTransactions: ForecastTransaction[],
+  onAddTransaction: () => void,
+  onDeleteTransaction: (id: string) => void
+}) {
+  const timelineData = useMemo(() => {
+    const expanded: { date: string, amount: number, type: 'income' | 'expense', name: string, id: string }[] = [];
+    const horizonMonths = 6;
+    const today = new Date();
+    const endDate = new Date(today.getFullYear(), today.getMonth() + horizonMonths, today.getDate());
+
+    forecastTransactions.forEach(t => {
+      const startDate = new Date(t.date);
+      if (t.recurring === 'none') {
+        expanded.push({ ...t });
+      } else {
+        let currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+          expanded.push({
+            id: `${t.id}-${currentDate.toISOString()}`,
+            date: currentDate.toISOString().split('T')[0],
+            amount: t.amount,
+            type: t.type,
+            name: t.name
+          });
+          if (t.recurring === 'weekly') {
+            currentDate.setDate(currentDate.getDate() + 7);
+          } else if (t.recurring === 'monthly') {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+          }
+        }
+      }
+    });
+
+    expanded.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let currentBalance = initialBalance;
+    return expanded.map(t => {
+      if (t.type === 'income') {
+        currentBalance += t.amount;
+      } else {
+        currentBalance -= t.amount;
+      }
+      return {
+        ...t,
+        balance: currentBalance
+      };
+    });
+  }, [initialBalance, forecastTransactions]);
+
+  const futureBalance = timelineData.length > 0 ? timelineData[timelineData.length - 1].balance : initialBalance;
+  const netChange = futureBalance - initialBalance;
+
+  return (
+    <div className="space-y-8">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mb-2">Current Balance</p>
+          <h4 className="text-2xl font-bold text-gray-900 tracking-tight">{formatCurrency(initialBalance)}</h4>
+          <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
+            <Wallet size={12} />
+            <span>Available in categories</span>
+          </div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mb-2">Projected Balance</p>
+          <h4 className="text-2xl font-bold text-gray-900 tracking-tight">{formatCurrency(futureBalance)}</h4>
+          <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
+            <CalendarDays size={12} />
+            <span>In 6 months</span>
+          </div>
+        </div>
+
+        <div className={`p-6 rounded-2xl border shadow-sm ${netChange >= 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
+          <p className={`text-[10px] font-bold uppercase tracking-[0.2em] mb-2 ${netChange >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>Net Change</p>
+          <h4 className={`text-2xl font-bold tracking-tight ${netChange >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+            {netChange >= 0 ? '+' : ''}{formatCurrency(netChange)}
+          </h4>
+          <div className={`mt-2 flex items-center gap-1 text-xs ${netChange >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+            {netChange >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+            <span>{netChange >= 0 ? 'Projected growth' : 'Projected deficit'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Timeline Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Timeline Table */}
+        <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-8 py-6 border-b border-gray-100">
+            <h3 className="text-lg font-bold text-gray-900">Event Timeline</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 text-gray-400 text-[10px] uppercase font-bold tracking-[0.1em]">
+                <tr>
+                  <th className="px-8 py-4">Date</th>
+                  <th className="px-8 py-4">Event</th>
+                  <th className="px-8 py-4">Amount</th>
+                  <th className="px-8 py-4 text-right">Balance</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {timelineData.map((point) => (
+                  <tr key={point.id} className="hover:bg-gray-50/50 transition-colors group">
+                    <td className="px-8 py-5">
+                      <span className="text-xs font-bold text-gray-500 font-mono">{point.date}</span>
+                    </td>
+                    <td className="px-8 py-5">
+                      <p className="text-sm font-bold text-gray-900">{point.name}</p>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                        point.type === 'income' ? 'text-emerald-500' : 'text-red-400'
+                      }`}>
+                        {point.type}
+                      </span>
+                    </td>
+                    <td className={`px-8 py-5 text-sm font-bold ${
+                      point.type === 'income' ? 'text-emerald-600' : 'text-red-500'
+                    }`}>
+                      {point.type === 'income' ? '+' : '-'}{formatCurrency(point.amount)}
+                    </td>
+                    <td className="px-8 py-5 text-right">
+                      <span className="text-sm font-bold text-gray-900">{formatCurrency(point.balance)}</span>
+                    </td>
+                  </tr>
+                ))}
+                {timelineData.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-20 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <CalendarDays size={32} className="text-gray-200" />
+                        <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">No events projected</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Configuration / Upcoming List */}
+        <div className="space-y-6">
+          <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-gray-900">Forecast Rules</h3>
+              <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-2 py-1 rounded-lg uppercase tracking-wider">
+                {forecastTransactions.length} Active
+              </span>
+            </div>
+            <div className="space-y-4">
+              {forecastTransactions.map(t => (
+                <div key={t.id} className="group p-4 rounded-2xl bg-gray-50 border border-gray-100 hover:border-emerald-200 hover:bg-white transition-all">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-bold text-sm text-gray-900">{t.name}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${t.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
+                          {t.type}
+                        </span>
+                        {t.recurring !== 'none' && (
+                          <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                            <History size={10} />
+                            {t.recurring}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => onDeleteTransaction(t.id)}
+                      className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-end mt-4">
+                    <p className="text-[10px] text-gray-400 font-bold font-mono">Starts {t.date}</p>
+                    <p className={`font-bold text-sm ${t.type === 'income' ? 'text-emerald-600' : 'text-gray-900'}`}>
+                      {formatCurrency(t.amount)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {forecastTransactions.length === 0 && (
+                <div className="py-12 text-center">
+                  <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">No rules defined</p>
+                  <button 
+                    onClick={() => onAddTransaction()}
+                    className="mt-4 text-emerald-600 text-xs font-bold hover:underline"
+                  >
+                    Add your first rule
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Utils
 function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('en-MM', {
-    style: 'currency',
-    currency: 'MMK',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
+  if (Math.abs(amount) < 100000) {
+    return new Intl.NumberFormat('en-MM').format(amount) + ' Ks';
+  }
+  const lakh = amount / 100000;
+  const formattedLakh = Number(lakh.toFixed(2));
+  return `${formattedLakh} Lakh`;
+}
+
+function formatMMKToLakh(amount: number) {
+  return formatCurrency(amount);
 }

@@ -23,8 +23,19 @@ export interface Income {
   amount: number;
 }
 
+export interface ForecastTransaction {
+  id: string;
+  date: string;
+  name: string;
+  amount: number;
+  type: 'income' | 'expense';
+  category?: string;
+  recurring: 'none' | 'weekly' | 'monthly';
+}
+
 export interface FinanceData {
   baseCapital: number;
   incomes: Income[];
   categories: Category[];
+  forecastTransactions: ForecastTransaction[];
 }
