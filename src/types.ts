@@ -28,9 +28,10 @@ export interface ForecastTransaction {
   date: string;
   name: string;
   amount: number;
-  type: 'income' | 'expense';
+  type: 'income' | 'expense' | 'investment';
   category?: string;
   recurring: 'none' | 'weekly' | 'monthly';
+  comment?: string;
 }
 
 export interface FinanceData {

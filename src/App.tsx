@@ -345,9 +345,10 @@ export default function App() {
       date: formData.get('date') as string,
       name: formData.get('name') as string,
       amount: Number(formData.get('amount')),
-      type: formData.get('type') as 'income' | 'expense',
+      type: formData.get('type') as 'income' | 'expense' | 'investment',
       category: formData.get('category') as string,
-      recurring: formData.get('recurring') as 'none' | 'weekly' | 'monthly'
+      recurring: formData.get('recurring') as 'none' | 'weekly' | 'monthly',
+      comment: formData.get('comment') as string
     };
     setData(prev => ({
       ...prev,
@@ -394,7 +395,7 @@ export default function App() {
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'runway' ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
           >
             <Calculator size={20} />
-            Runway Calculator
+            Runway
           </button>
           <button 
             onClick={() => setActiveTab('forecast')}
@@ -459,7 +460,7 @@ export default function App() {
                 <h2 className="text-2xl font-bold text-gray-900">
                   {activeTab === 'dashboard' ? 'Financial Overview' : 
                    activeTab === 'income' ? 'Income' : 
-                   activeTab === 'runway' ? 'Runway Calculator' :
+                   activeTab === 'runway' ? 'Runway' :
                    data.categories.find(c => c.id === activeTab)?.name || 'Category Details'}
                 </h2>
                 <p className="text-gray-500">Manage your capital and tracking efficiently.</p>
@@ -727,7 +728,7 @@ export default function App() {
             </div>
 
             <ForecastingTool 
-              initialBalance={totalUnusedInCategories} 
+              initialBalance={totalUnusedInCategories + totalRemaining} 
               forecastTransactions={data.forecastTransactions}
               onAddTransaction={() => setIsForecastModalOpen(true)}
               onDeleteTransaction={handleDeleteForecastTransaction}
@@ -1162,6 +1163,7 @@ export default function App() {
                 <select name="type" className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none bg-white">
                   <option value="income">Income</option>
                   <option value="expense">Expense</option>
+                  <option value="investment">Investment</option>
                 </select>
               </div>
               <div>
@@ -1175,6 +1177,10 @@ export default function App() {
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Amount</label>
                 <input required name="amount" type="number" step="1" placeholder="0" className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Comment</label>
+                <textarea name="comment" placeholder="Add a note..." className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none h-20 resize-none"></textarea>
               </div>
               <button type="submit" className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all">
                 Add to Forecast
@@ -1552,7 +1558,7 @@ function ForecastingTool({ initialBalance, forecastTransactions, onAddTransactio
   onDeleteTransaction: (id: string) => void
 }) {
   const timelineData = useMemo(() => {
-    const expanded: { date: string, amount: number, type: 'income' | 'expense', name: string, id: string }[] = [];
+    const expanded: { date: string, amount: number, type: 'income' | 'expense' | 'investment', name: string, id: string, originalId: string, comment?: string }[] = [];
     const horizonMonths = 6;
     const today = new Date();
     const endDate = new Date(today.getFullYear(), today.getMonth() + horizonMonths, today.getDate());
@@ -1560,16 +1566,18 @@ function ForecastingTool({ initialBalance, forecastTransactions, onAddTransactio
     forecastTransactions.forEach(t => {
       const startDate = new Date(t.date);
       if (t.recurring === 'none') {
-        expanded.push({ ...t });
+        expanded.push({ ...t, originalId: t.id });
       } else {
         let currentDate = new Date(startDate);
         while (currentDate <= endDate) {
           expanded.push({
             id: `${t.id}-${currentDate.toISOString()}`,
+            originalId: t.id,
             date: currentDate.toISOString().split('T')[0],
             amount: t.amount,
             type: t.type,
-            name: t.name
+            name: t.name,
+            comment: t.comment
           });
           if (t.recurring === 'weekly') {
             currentDate.setDate(currentDate.getDate() + 7);
@@ -1604,20 +1612,19 @@ function ForecastingTool({ initialBalance, forecastTransactions, onAddTransactio
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mb-2">Current Balance</p>
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mb-2">Remaining Balance</p>
           <h4 className="text-2xl font-bold text-gray-900 tracking-tight">{formatCurrency(initialBalance)}</h4>
           <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
             <Wallet size={12} />
-            <span>Available in categories</span>
+            <span>Total cash on hand</span>
           </div>
         </div>
         
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mb-2">Projected Balance</p>
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mb-2">Future Balance</p>
           <h4 className="text-2xl font-bold text-gray-900 tracking-tight">{formatCurrency(futureBalance)}</h4>
           <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
             <CalendarDays size={12} />
-            <span>In 6 months</span>
           </div>
         </div>
 
@@ -1627,123 +1634,84 @@ function ForecastingTool({ initialBalance, forecastTransactions, onAddTransactio
             {netChange >= 0 ? '+' : ''}{formatCurrency(netChange)}
           </h4>
           <div className={`mt-2 flex items-center gap-1 text-xs ${netChange >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-            {netChange >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-            <span>{netChange >= 0 ? 'Projected growth' : 'Projected deficit'}</span>
+            {netChange >= 0 && (
+              <>
+                <TrendingUp size={12} />
+                <span>Projected growth</span>
+              </>
+            )}
           </div>
         </div>
       </div>
 
       {/* Timeline Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Timeline Table */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-8 py-6 border-b border-gray-100">
-            <h3 className="text-lg font-bold text-gray-900">Event Timeline</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-gray-50 text-gray-400 text-[10px] uppercase font-bold tracking-[0.1em]">
-                <tr>
-                  <th className="px-8 py-4">Date</th>
-                  <th className="px-8 py-4">Event</th>
-                  <th className="px-8 py-4">Amount</th>
-                  <th className="px-8 py-4 text-right">Balance</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {timelineData.map((point) => (
-                  <tr key={point.id} className="hover:bg-gray-50/50 transition-colors group">
-                    <td className="px-8 py-5">
-                      <span className="text-xs font-bold text-gray-500 font-mono">{point.date}</span>
-                    </td>
-                    <td className="px-8 py-5">
-                      <p className="text-sm font-bold text-gray-900">{point.name}</p>
+      <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="text-lg font-bold text-gray-900">Event Timeline</h3>
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Next 6 Months</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-gray-50 text-gray-400 text-[10px] uppercase font-bold tracking-[0.1em]">
+              <tr>
+                <th className="px-8 py-4">Date</th>
+                <th className="px-8 py-4">Event</th>
+                <th className="px-8 py-4">Amount</th>
+                <th className="px-8 py-4 text-right">Balance</th>
+                <th className="px-8 py-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {timelineData.map((point) => (
+                <tr key={point.id} className="hover:bg-gray-50/50 transition-colors group">
+                  <td className="px-8 py-5">
+                    <span className="text-xs font-bold text-gray-500 font-mono">{point.date}</span>
+                  </td>
+                  <td className="px-8 py-5">
+                    <p className="text-sm font-bold text-gray-900">{point.name}</p>
+                    <div className="flex items-center gap-2">
                       <span className={`text-[9px] font-bold uppercase tracking-wider ${
-                        point.type === 'income' ? 'text-emerald-500' : 'text-red-400'
+                        point.type === 'income' ? 'text-emerald-500' : 
+                        point.type === 'investment' ? 'text-amber-500' : 'text-red-400'
                       }`}>
                         {point.type}
                       </span>
-                    </td>
-                    <td className={`px-8 py-5 text-sm font-bold ${
-                      point.type === 'income' ? 'text-emerald-600' : 'text-red-500'
-                    }`}>
-                      {point.type === 'income' ? '+' : '-'}{formatCurrency(point.amount)}
-                    </td>
-                    <td className="px-8 py-5 text-right">
-                      <span className="text-sm font-bold text-gray-900">{formatCurrency(point.balance)}</span>
-                    </td>
-                  </tr>
-                ))}
-                {timelineData.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-20 text-center">
-                      <div className="flex flex-col items-center gap-2">
-                        <CalendarDays size={32} className="text-gray-200" />
-                        <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">No events projected</p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Configuration / Upcoming List */}
-        <div className="space-y-6">
-          <div className="bg-white p-8 rounded-3xl border border-gray-200 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-gray-900">Forecast Rules</h3>
-              <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-2 py-1 rounded-lg uppercase tracking-wider">
-                {forecastTransactions.length} Active
-              </span>
-            </div>
-            <div className="space-y-4">
-              {forecastTransactions.map(t => (
-                <div key={t.id} className="group p-4 rounded-2xl bg-gray-50 border border-gray-100 hover:border-emerald-200 hover:bg-white transition-all">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="font-bold text-sm text-gray-900">{t.name}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[10px] font-bold uppercase tracking-wider ${t.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
-                          {t.type}
-                        </span>
-                        {t.recurring !== 'none' && (
-                          <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
-                            <History size={10} />
-                            {t.recurring}
-                          </span>
-                        )}
-                      </div>
+                      {point.comment && (
+                        <span className="text-[10px] text-gray-400 italic">• {point.comment}</span>
+                      )}
                     </div>
+                  </td>
+                  <td className={`px-8 py-5 text-sm font-bold ${
+                    point.type === 'income' ? 'text-emerald-600' : 
+                    point.type === 'investment' ? 'text-amber-600' : 'text-red-500'
+                  }`}>
+                    {point.type === 'income' ? '+' : '-'}{formatCurrency(point.amount)}
+                  </td>
+                  <td className="px-8 py-5 text-right">
+                    <span className="text-sm font-bold text-gray-900">{formatCurrency(point.balance)}</span>
+                  </td>
+                  <td className="px-8 py-5 text-right">
                     <button 
-                      onClick={() => onDeleteTransaction(t.id)}
-                      className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                      onClick={() => onDeleteTransaction(point.originalId)}
+                      className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                     >
                       <Trash2 size={16} />
                     </button>
-                  </div>
-                  <div className="flex justify-between items-end mt-4">
-                    <p className="text-[10px] text-gray-400 font-bold font-mono">Starts {t.date}</p>
-                    <p className={`font-bold text-sm ${t.type === 'income' ? 'text-emerald-600' : 'text-gray-900'}`}>
-                      {formatCurrency(t.amount)}
-                    </p>
-                  </div>
-                </div>
+                  </td>
+                </tr>
               ))}
-              {forecastTransactions.length === 0 && (
-                <div className="py-12 text-center">
-                  <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">No rules defined</p>
-                  <button 
-                    onClick={() => onAddTransaction()}
-                    className="mt-4 text-emerald-600 text-xs font-bold hover:underline"
-                  >
-                    Add your first rule
-                  </button>
-                </div>
+              {timelineData.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-20 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <CalendarDays size={32} className="text-gray-200" />
+                      <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">No events projected</p>
+                    </div>
+                  </td>
+                </tr>
               )}
-            </div>
-          </div>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
